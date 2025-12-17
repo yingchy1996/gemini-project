@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时 HTML/JS 代码预览编辑器</title>
+    <style>
+        /* ===== CSS 样式设定 ===== 
+        */
+
+        /* 重置基础样式，确保占满全屏 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* 防止出现双重滚动条 */
+        }
+
+        /* 主容器：使用 Flexbox 进行左右分割 */
+        .container {
+            display: flex;
+            height: 100vh; /* 视口高度的 100% */
+            border-top: 2px solid #333;
+        }
+
+        /* 左右两个面板的通用样式 */
+        .pane {
+            flex: 1; /* 让左右两边平分宽度 (50%/50%) */
+            display: flex;
+            flex-direction: column;
+            min-width: 200px; /* 设置最小宽度以防止过度挤压 */
+        }
+
+        /* 左侧编辑器面板样式 */
+        .editor-pane {
+            background-color: #1e1e1e; /* 深色背景，类似 VS Code */
+            border-right: 1px solid #444;
+        }
+
+        /* 面板标题栏样式 */
+        .pane-header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 核心组件：文本输入域 (Textarea) */
+        #code-input {
+            flex-grow: 1; /* 填满剩余垂直空间 */
+            background-color: #1e1e1e;
+            color: #d4d4d4; /* 浅灰色文字 */
+            border: none;
+            resize: none; /* 禁止用户手动拖动大小 */
+            padding: 15px;
+            font-family: 'Courier New', Courier, monospace; /* 使用等宽字体 */
+            font-size: 14px;
+            line-height: 1.5;
+            outline: none; /* 移除选中时的蓝色边框 */
+            white-space: pre; /* 保留空格和换行 */
+            overflow: auto;
+        }
+
+        /* 核心组件：预览框架 (Iframe) */
+        #preview-frame {
+            flex-grow: 1; /* 填满剩余垂直空间 */
+            border: none;
+            background-color: #fff; /* 预览区域通常是白色背景 */
+            display: block; /* 消除 iframe底部的默认间隙 */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="pane editor-pane">
+            <div class="pane-header">代码编辑 (HTML & JS)</div>
+            <textarea id="code-input" spellcheck="false">
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {
+    font-family: sans-serif;
+    text-align: center;
+    padding-top: 50px;
+    background-color: #f0f2f5;
+  }
+  .box {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: inline-block;
+  }
+  h1 { color: #333; }
+  button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  button:hover { background-color: #0056b3; }
+</style>
+</head>
+<body>
+
+  <div class="box">
+    <h1>你好，世界!</h1>
+    <p>点击下面的按钮来改变文字。</p>
+    <button id="myBtn">点击我</button>
+  </div>
+
+<script>
+  // 这里是 JavaScript
+  document.getElementById('myBtn').addEventListener('click', function() {
+    const h1 = document.querySelector('h1');
+    h1.textContent = "JavaScript 运行成功!";
+    h1.style.color = "#28a745";
+    this.textContent = "已点击!";
+  });
+</script>
+
+</body>
+</html>
+            </textarea>
+        </div>
+
+        <div class="pane preview-pane">
+            <div class="pane-header" style="background-color: #eee; color: #333; border-bottom: 1px solid #ccc;">实时预览</div>
+            <iframe id="preview-frame"></iframe>
+        </div>
+    </div>
+
+
+    <script>
+        // 1. 获取 DOM 元素
+        const codeInput = document.getElementById('code-input');
+        const previewFrame = document.getElementById('preview-frame');
+
+        // 2. 定义更新预览的函数
+        function updatePreview() {
+            // 获取 textarea 中的所有内容
+            const codeContent = codeInput.value;
+
+            // 获取 iframe 的文档对象 (兼容性写法)
+            const frameDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+
+            // 关键步骤：
+            // a. 打开文档流，准备写入。这会清除之前的内容。
+            frameDoc.open();
+            // b. 写入 textarea 中的 HTML 代码。
+            frameDoc.write(codeContent);
+            // c. 关闭文档流。这会告诉浏览器内容已完成，可以开始渲染并执行其中的脚本。
+            frameDoc.close();
+        }
+
+        // 3. 添加事件监听器
+        // 监听 'input' 事件，这样每当用户敲击键盘修改内容时，就会触发更新。
+        // 如果觉得太频繁，可以使用 'change' 事件（需要失去焦点才触发），或者添加防抖(debounce)功能。
+        codeInput.addEventListener('input', updatePreview);
+
+        // 4. 页面加载时首次运行
+        // 确保页面刚打开时，textarea 里的默认代码能显示在预览中。
+        window.addEventListener('DOMContentLoaded', updatePreview);
+    </script>
+
+</body>
+</html>
