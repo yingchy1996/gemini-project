@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>表情包切图工具 (带缩放)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+        }
+
+        h1 { margin-bottom: 10px; }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .control-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        label { font-weight: bold; font-size: 14px; }
+
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .size-inputs input { width: 70px; }
+
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 14px;
+        }
+
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        
+        #downloadBtn { background-color: #28a745; font-size: 16px; padding: 10px 20px; }
+        #downloadBtn:hover { background-color: #218838; }
+
+        .preset-btn {
+            background-color: #6c757d;
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+        .preset-btn:hover { background-color: #5a6268; }
+
+        .canvas-container {
+            position: relative;
+            margin: 20px 0;
+            max-width: 100%;
+            overflow: auto;
+            border: 2px dashed #ccc;
+            background: #eef;
+        }
+
+        canvas { display: block; max-width: 100%; }
+
+        #previewGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .sticker-item {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .sticker-item img { 
+            max-width: 100%; 
+            height: auto; 
+            border: 1px solid #f0f0f0; /* Show border to see size */
+        }
+        .sticker-item .info { 
+            text-align: center; 
+            font-size: 11px; 
+            color: #666; 
+            margin-top: 5px; 
+        }
+    </style>
+</head>
+<body>
+
+    <h1>✂️ 表情包切图 + 缩放工具</h1>
+    
+    <div class="controls">
+        <div class="control-row">
+            <div class="input-group">
+                <label>1. 上传图片:</label>
+                <input type="file" id="imageInput" accept="image/*">
+            </div>
+            
+            <div class="input-group">
+                <label>行数:</label>
+                <input type="number" id="rowsInput" value="5" min="1">
+            </div>
+            
+            <div class="input-group">
+                <label>列数:</label>
+                <input type="number" id="colsInput" value="4" min="1">
+            </div>
+        </div>
+
+        <div class="control-row">
+            <div class="input-group size-inputs">
+                <label>2. 导出尺寸 (可选):</label>
+                <input type="number" id="targetWidth" placeholder="宽 px">
+                <span>x</span>
+                <input type="number" id="targetHeight" placeholder="高 px">
+            </div>
+            
+            <div class="input-group">
+                <label>常用尺寸:</label>
+                <button class="preset-btn" onclick="setSize(128, 128)">128 (小)</button>
+                <button class="preset-btn" onclick="setSize(240, 240)">240 (微信)</button>
+                <button class="preset-btn" onclick="setSize(512, 512)">512 (大)</button>
+                <button class="preset-btn" onclick="setSize('', '')">原图大小</button>
+            </div>
+        </div>
+
+        <div class="control-row">
+            <button id="sliceBtn" disabled>✂️ 生成切片预览</button>
+            <button id="downloadBtn" disabled>⬇️ 下载 ZIP 包</button>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="mainCanvas"></canvas>
+    </div>
+
+    <div id="previewGrid"></div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const rowsInput = document.getElementById('rowsInput');
+        const colsInput = document.getElementById('colsInput');
+        const targetWidthInput = document.getElementById('targetWidth');
+        const targetHeightInput = document.getElementById('targetHeight');
+        const sliceBtn = document.getElementById('sliceBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const previewGrid = document.getElementById('previewGrid');
+
+        let originalImage = null;
+        let slicedImages = [];
+
+        // 设置快捷尺寸
+        window.setSize = function(w, h) {
+            targetWidthInput.value = w;
+            targetHeightInput.value = h;
+        };
+
+        // 1. 监听图片上传
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                originalImage = new Image();
+                originalImage.onload = () => {
+                    sliceBtn.disabled = false;
+                    drawPreview();
+                };
+                originalImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 2. 监听输入框变化，实时重绘预览网格
+        [rowsInput, colsInput].forEach(input => {
+            input.addEventListener('input', drawPreview);
+        });
+
+        // 3. 绘制带有网格线的预览图
+        function drawPreview() {
+            if (!originalImage) return;
+
+            canvas.width = originalImage.width;
+            canvas.height = originalImage.height;
+            ctx.drawImage(originalImage, 0, 0);
+
+            const rows = parseInt(rowsInput.value) || 1;
+            const cols = parseInt(colsInput.value) || 1;
+            const cellWidth = canvas.width / cols;
+            const cellHeight = canvas.height / rows;
+
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = Math.max(2, canvas.width / 500);
+
+            for (let i = 1; i < rows; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * cellHeight);
+                ctx.lineTo(canvas.width, i * cellHeight);
+                ctx.stroke();
+            }
+
+            for (let j = 1; j < cols; j++) {
+                ctx.beginPath();
+                ctx.moveTo(j * cellWidth, 0);
+                ctx.lineTo(j * cellWidth, canvas.height);
+                ctx.stroke();
+            }
+        }
+
+        // 4. 执行切片和缩放逻辑
+        sliceBtn.addEventListener('click', async () => {
+            if (!originalImage) return;
+
+            previewGrid.innerHTML = '';
+            slicedImages = [];
+            const rows = parseInt(rowsInput.value);
+            const cols = parseInt(colsInput.value);
+            
+            // 计算原图中每一个格子的尺寸
+            const srcW = originalImage.width / cols;
+            const srcH = originalImage.height / rows;
+
+            // 决定导出尺寸
+            let destW = srcW;
+            let destH = srcH;
+
+            // 如果用户输入了尺寸，则使用用户输入的尺寸
+            if (targetWidthInput.value && targetHeightInput.value) {
+                destW = parseInt(targetWidthInput.value);
+                destH = parseInt(targetHeightInput.value);
+            }
+
+            let count = 0;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    count++;
+                    
+                    // 创建临时画布，尺寸设为最终导出尺寸
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = destW;
+                    tempCanvas.height = destH;
+                    const tempCtx = tempCanvas.getContext('2d');
+
+                    // 核心逻辑：从原图切下 (srcW, srcH) 的区域，并拉伸绘制到 (destW, destH) 的画布上
+                    tempCtx.drawImage(
+                        originalImage,
+                        c * srcW, r * srcH, // 源位置
+                        srcW, srcH,         // 源大小
+                        0, 0,               // 目标位置
+                        destW, destH        // 目标大小 (这里实现了缩放)
+                    );
+
+                    const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+                    const url = URL.createObjectURL(blob);
+                    
+                    slicedImages.push({ 
+                        name: `sticker_${count}.png`, 
+                        blob: blob 
+                    });
+
+                    // 界面展示
+                    const div = document.createElement('div');
+                    div.className = 'sticker-item';
+                    div.innerHTML = `
+                        <img src="${url}">
+                        <div class="info">
+                            #${count}<br>
+                            ${destW}x${destH}
+                        </div>
+                    `;
+                    previewGrid.appendChild(div);
+                }
+            }
+            
+            downloadBtn.disabled = false;
+            previewGrid.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        // 5. 打包下载
+        downloadBtn.addEventListener('click', () => {
+            if (slicedImages.length === 0) return;
+            const zip = new JSZip();
+            const folder = zip.folder("stickers_resized");
+            slicedImages.forEach(img => {
+                folder.file(img.name, img.blob);
+            });
+            zip.generateAsync({ type: "blob" }).then(function(content) {
+                saveAs(content, "emojis_resized.zip");
+            });
+        });
+
+    </script>
+</body>
+</html>
