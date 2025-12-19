@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的工具集合</title>
+    <style>
+        /* CSS 样式部分 - 控制页面外观 */
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: var(--text-color);
+            margin-bottom: 40px;
+            font-weight: 600;
+        }
+
+        /* 容器网格布局 */
+        #tool-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        /* 卡片样式 */
+        .tool-card {
+            background-color: var(--card-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            text-decoration: none;
+            color: var(--text-color);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e1e4e8;
+            cursor: pointer;
+        }
+
+        /* 鼠标悬停效果 */
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            border-color: var(--primary-color);
+        }
+
+        .tool-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .tool-desc {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            margin-top: 8px;
+        }
+
+        /* 简单的页脚 */
+        footer {
+            margin-top: 50px;
+            color: #999;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🚀 常用工具集合</h1>
+    
+    <div id="tool-container"></div>
+
+    <footer>
+        &copy; 2025 Tool Collection
+    </footer>
+
+    <script>
+        // ==========================================
+        // JS 数据配置区 (在此处修改链接)
+        // ==========================================
+        const tools = [
+            { 
+                title: "记账本", 
+                url: "https://yingchy1996.github.io/gemini-project/ledger.html",
+                desc: "日常收支记录"
+            },
+            { 
+                title: "Banana 提示词", 
+                url: "https://yingchy1996.github.io/gemini-project/banana.html",
+                desc: "AI 提示词辅助工具"
+            },
+            { 
+                title: "代码预览", 
+                url: "https://yingchy1996.github.io/gemini-project/codeView.html",
+                desc: "在线查看与格式化代码"
+            },
+            { 
+                title: "表情包切割工具", 
+                url: "https://yingchy1996.github.io/gemini-project/emoji.html",
+                desc: "图片处理与表情制作"
+            },
+            { 
+                title: "JSON 工具", 
+                url: "https://yingchy1996.github.io/gemini-project/json.html",
+                desc: "JSON 格式化与校验"
+            }
+        ];
+
+        // ==========================================
+        // 逻辑渲染区 (无需修改)
+        // ==========================================
+        const container = document.getElementById('tool-container');
+
+        function renderTools() {
+            container.innerHTML = ''; // 清空容器
+            
+            tools.forEach(tool => {
+                // 创建 A 标签作为卡片
+                const card = document.createElement('a');
+                card.className = 'tool-card';
+                card.href = tool.url;
+                card.target = '_blank'; // 在新窗口打开
+
+                // 卡片内容
+                const title = document.createElement('div');
+                title.className = 'tool-title';
+                title.textContent = tool.title;
+
+                const desc = document.createElement('div');
+                desc.className = 'tool-desc';
+                desc.textContent = tool.desc;
+
+                // 组装
+                card.appendChild(title);
+                card.appendChild(desc);
+                container.appendChild(card);
+            });
+        }
+
+        // 执行渲染
+        renderTools();
+    </script>
+</body>
+</html>
