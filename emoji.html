@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>表情包切图工具 (带缩放)</title>
+    <title>表情包切图工具 (带缩放和透明背景)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
@@ -85,6 +85,30 @@
         }
         .preset-btn:hover { background-color: #5a6268; }
 
+        .color-picker-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-picker {
+            width: 40px;
+            height: 30px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .transparent-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+        }
+
         .canvas-container {
             position: relative;
             margin: 20px 0;
@@ -118,20 +142,45 @@
 
         .sticker-item img { 
             max-width: 100%; 
-            height: auto; 
-            border: 1px solid #f0f0f0; /* Show border to see size */
+            height: auto;
+            background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                            linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                            linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                            linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
+        
         .sticker-item .info { 
             text-align: center; 
             font-size: 11px; 
             color: #666; 
             margin-top: 5px; 
         }
+        
+        .status {
+            padding: 10px;
+            background: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .checkerboard {
+            background-image: 
+                linear-gradient(45deg, #ccc 25%, transparent 25%), 
+                linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #ccc 75%), 
+                linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
     </style>
 </head>
 <body>
 
-    <h1>✂️ 表情包切图 + 缩放工具</h1>
+    <h1>✂️ 表情包切图 + 透明背景工具</h1>
     
     <div class="controls">
         <div class="control-row">
@@ -168,13 +217,36 @@
             </div>
         </div>
 
+        <div class="control-row transparent-option">
+            <div>
+                <input type="checkbox" id="transparentBg" checked>
+                <label for="transparentBg">3. 透明背景处理</label>
+            </div>
+            
+            <div class="color-picker-container">
+                <label>背景色:</label>
+                <input type="color" id="bgColorPicker" value="#ffffff" class="color-picker">
+                <span id="colorValue">#FFFFFF</span>
+            </div>
+            
+            <div class="input-group">
+                <label>容差:</label>
+                <input type="number" id="tolerance" value="20" min="0" max="100">
+                <span>(0-100)</span>
+            </div>
+            
+            <button class="preset-btn" onclick="pickColorFromCanvas()">取色器</button>
+        </div>
+
         <div class="control-row">
             <button id="sliceBtn" disabled>✂️ 生成切片预览</button>
-            <button id="downloadBtn" disabled>⬇️ 下载 ZIP 包</button>
+            <button id="downloadBtn" disabled>⬇️ 下载 ZIP 包 (PNG透明)</button>
         </div>
+        
+        <div id="status" class="status"></div>
     </div>
 
-    <div class="canvas-container">
+    <div class="canvas-container checkerboard">
         <canvas id="mainCanvas"></canvas>
     </div>
 
@@ -186,20 +258,43 @@
         const colsInput = document.getElementById('colsInput');
         const targetWidthInput = document.getElementById('targetWidth');
         const targetHeightInput = document.getElementById('targetHeight');
+        const transparentBgCheckbox = document.getElementById('transparentBg');
+        const bgColorPicker = document.getElementById('bgColorPicker');
+        const toleranceInput = document.getElementById('tolerance');
+        const colorValue = document.getElementById('colorValue');
         const sliceBtn = document.getElementById('sliceBtn');
         const downloadBtn = document.getElementById('downloadBtn');
+        const statusDiv = document.getElementById('status');
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
         const previewGrid = document.getElementById('previewGrid');
 
         let originalImage = null;
         let slicedImages = [];
+        let isPickingColor = false;
+
+        // 显示状态信息
+        function showStatus(message, isError = false) {
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = isError ? '#f8d7da' : '#d4edda';
+            statusDiv.style.color = isError ? '#721c24' : '#155724';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
 
         // 设置快捷尺寸
         window.setSize = function(w, h) {
             targetWidthInput.value = w;
             targetHeightInput.value = h;
         };
+
+        // 更新颜色值显示
+        bgColorPicker.addEventListener('input', function() {
+            colorValue.textContent = this.value.toUpperCase();
+        });
 
         // 1. 监听图片上传
         imageInput.addEventListener('change', (e) => {
@@ -229,6 +324,9 @@
 
             canvas.width = originalImage.width;
             canvas.height = originalImage.height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制原始图片
             ctx.drawImage(originalImage, 0, 0);
 
             const rows = parseInt(rowsInput.value) || 1;
@@ -252,9 +350,79 @@
                 ctx.lineTo(j * cellWidth, canvas.height);
                 ctx.stroke();
             }
+            
+            // 为取色器添加点击事件
+            canvas.style.cursor = isPickingColor ? 'crosshair' : 'default';
         }
 
-        // 4. 执行切片和缩放逻辑
+        // 4. 从画布取色
+        function pickColorFromCanvas() {
+            if (!originalImage) {
+                showStatus('请先上传图片', true);
+                return;
+            }
+            
+            isPickingColor = true;
+            canvas.style.cursor = 'crosshair';
+            showStatus('请点击图片上的背景色区域');
+            
+            canvas.addEventListener('click', pickColorHandler);
+        }
+        
+        function pickColorHandler(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // 获取点击像素的颜色
+            const pixelData = ctx.getImageData(x, y, 1, 1).data;
+            const hexColor = rgbToHex(pixelData[0], pixelData[1], pixelData[2]);
+            
+            // 设置颜色选择器
+            bgColorPicker.value = hexColor;
+            colorValue.textContent = hexColor.toUpperCase();
+            
+            // 恢复状态
+            isPickingColor = false;
+            canvas.style.cursor = 'default';
+            showStatus(`已选取颜色: ${hexColor.toUpperCase()}`);
+            
+            canvas.removeEventListener('click', pickColorHandler);
+            drawPreview(); // 重绘以恢复网格
+        }
+        
+        // RGB转十六进制
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        // 5. 将颜色转换为透明
+        function makeTransparent(imageData, targetColor, tolerance) {
+            const data = imageData.data;
+            const r = parseInt(targetColor.substr(1, 2), 16);
+            const g = parseInt(targetColor.substr(3, 2), 16);
+            const b = parseInt(targetColor.substr(5, 2), 16);
+            
+            const toleranceSquared = tolerance * tolerance;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const dr = data[i] - r;
+                const dg = data[i + 1] - g;
+                const db = data[i + 2] - b;
+                
+                // 计算颜色差异
+                const diff = dr * dr + dg * dg + db * db;
+                
+                // 如果颜色接近目标色，设置为透明
+                if (diff <= toleranceSquared) {
+                    data[i + 3] = 0; // 设置alpha通道为0（完全透明）
+                }
+            }
+            
+            return imageData;
+        }
+
+        // 6. 执行切片和透明处理
         sliceBtn.addEventListener('click', async () => {
             if (!originalImage) return;
 
@@ -276,6 +444,13 @@
                 destW = parseInt(targetWidthInput.value);
                 destH = parseInt(targetHeightInput.value);
             }
+            
+            // 获取透明背景设置
+            const useTransparentBg = transparentBgCheckbox.checked;
+            const targetColor = bgColorPicker.value;
+            const tolerance = parseInt(toleranceInput.value);
+
+            showStatus(`正在处理 ${rows}×${cols}=${rows*cols} 个切片...`);
 
             let count = 0;
             for (let r = 0; r < rows; r++) {
@@ -287,15 +462,27 @@
                     tempCanvas.width = destW;
                     tempCanvas.height = destH;
                     const tempCtx = tempCanvas.getContext('2d');
-
-                    // 核心逻辑：从原图切下 (srcW, srcH) 的区域，并拉伸绘制到 (destW, destH) 的画布上
+                    
+                    // 先绘制原始内容
                     tempCtx.drawImage(
                         originalImage,
-                        c * srcW, r * srcH, // 源位置
-                        srcW, srcH,         // 源大小
-                        0, 0,               // 目标位置
-                        destW, destH        // 目标大小 (这里实现了缩放)
+                        c * srcW, r * srcH,
+                        srcW, srcH,
+                        0, 0,
+                        destW, destH
                     );
+                    
+                    // 如果需要透明背景处理
+                    if (useTransparentBg) {
+                        // 获取图像数据
+                        const imageData = tempCtx.getImageData(0, 0, destW, destH);
+                        
+                        // 将背景色转换为透明
+                        const transparentData = makeTransparent(imageData, targetColor, tolerance);
+                        
+                        // 将处理后的图像数据放回画布
+                        tempCtx.putImageData(transparentData, 0, 0);
+                    }
 
                     const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
                     const url = URL.createObjectURL(blob);
@@ -312,7 +499,8 @@
                         <img src="${url}">
                         <div class="info">
                             #${count}<br>
-                            ${destW}x${destH}
+                            ${destW}x${destH}<br>
+                            ${useTransparentBg ? '透明背景' : '原图背景'}
                         </div>
                     `;
                     previewGrid.appendChild(div);
@@ -320,19 +508,27 @@
             }
             
             downloadBtn.disabled = false;
+            showStatus(`处理完成！共生成 ${slicedImages.length} 个透明表情包`);
             previewGrid.scrollIntoView({ behavior: 'smooth' });
         });
 
-        // 5. 打包下载
+        // 7. 打包下载
         downloadBtn.addEventListener('click', () => {
             if (slicedImages.length === 0) return;
+            
+            showStatus('正在打包ZIP文件，请稍候...');
+            
             const zip = new JSZip();
-            const folder = zip.folder("stickers_resized");
+            const folder = zip.folder("stickers_transparent");
             slicedImages.forEach(img => {
                 folder.file(img.name, img.blob);
             });
+            
             zip.generateAsync({ type: "blob" }).then(function(content) {
-                saveAs(content, "emojis_resized.zip");
+                saveAs(content, "transparent_stickers.zip");
+                showStatus('ZIP文件下载完成！');
+            }).catch(function(error) {
+                showStatus('打包失败: ' + error.message, true);
             });
         });
 
